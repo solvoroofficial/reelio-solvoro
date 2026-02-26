@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>🎬 Reelio Lite – 9:16 editor</title>
+  <!-- Konva for canvas overlay (lightweight) -->
+  <script src="https://unpkg.com/konva@9.3.6/konva.min.js"></script>
+  <!-- FFmpeg.wasm lazy loaded on export -->
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      background: #0b0b0f;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+    }
+
+    /* main glass card */
+    #app {
+      width: 100%;
+      max-width: 1400px;
+      background: rgba(20, 20, 30, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 2rem;
+      padding: 1.2rem;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8), 0 0 0 1px rgba(108,92,231,0.2);
+    }
+
+    /* responsive grid */
+    .dashboard {
+      display: grid;
+      grid-template-columns: 280px 1fr 300px;
+      grid-template-rows: auto 100px;
+      gap: 1rem;
+      align-items: start;
+    }
+
+    /* left panel */
+    .panel-left {
+      background: rgba(0,0,0,0.3);
+      border-radius: 1.5rem;
+      padding: 1.2rem;
+      border: 1px solid rgba(108,92,231,0.2);
+      backdrop-filter: blur(8px);
+    }
+
+    /* center preview */
+    .preview-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.8rem;
+    }
+
+    .canvas-wrapper {
+      background: #0a0a0e;
+      border-radius: 2rem;
+      padding: 12px;
+      box-shadow: 0 20px 30px -10px black;
+      border: 1px solid #2a2a3a;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+
+    #reel-canvas-container {
+      width: 100%;
+      max-width: 360px; /* 9:16 base */
+      aspect-ratio: 9 / 16;
+      position: relative;
+      background: #000;
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 0 0 2px #6c5ce7 inset;
+    }
+
+    #konva-stage {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .playback-bar {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #aaa;
+    }
+
+    .playback-bar input[type=range] {
+      flex: 1;
+      height: 5px;
+      border-radius: 10px;
+      background: #2a2a3a;
+    }
+
+    /* right panel */
+    .panel-right {
+      background: rgba(0,0,0,0.3);
+      border-radius: 1.5rem;
+      padding: 1.2rem;
+      border: 1px solid rgba(108,92,231,0.2);
+      backdrop-filter: blur(8px);
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    /* bottom timeline */
+    .timeline-bar {
+      grid-column: 1 / -1;
+      background: rgba(15,15,20,0.8);
+      border-radius: 2rem;
+      padding: 1rem 1.5rem;
+      border: 1px solid #6c5ce7;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    /* typography & controls */
+    h3 { font-size: 1rem; font-weight: 500; margin-bottom: 0.8rem; color: #ccc; letter-spacing: 0.3px; border-left: 3px solid #6c5ce7; padding-left: 8px; }
+    button, .btn {
+      background: #2a2a3a;
+      border: none;
+      color: white;
+      padding: 8px 14px;
+      border-radius: 40px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      border: 1px solid #3f3f55;
+    }
+    button.accent {
+      background: #6c5ce7;
+      border-color: #8a7cf0;
+    }
+    button:active { transform: scale(0.97); }
+    input[type=range] { accent-color: #6c5ce7; }
+    .flex-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .text-overlay-item {
+      background: #1e1e2a;
+      border-radius: 20px;
+      padding: 10px;
+      margin-bottom: 10px;
+      font-size: 0.85rem;
+    }
+
+    /* mobile layout */
+    @media (max-width: 800px) {
+      .dashboard {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto auto;
+      }
+      .timeline-bar { flex-direction: column; align-items: stretch; gap: 1rem; }
+      .panel-right { max-height: none; }
+      .canvas-wrapper { max-width: 100%; }
+    }
+
+    /* drag & drop highlight */
+    .drag-over { border: 2px dashed #6c5ce7; background: rgba(108,92,231,0.1); }
+    .badge { background: #6c5ce7; padding: 2px 8px; border-radius: 30px; font-size: 0.7rem; }
+    .glow { box-shadow: 0 0 0 2px #6c5ce7; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <!-- header -->
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0 0.5rem;">
+    <h2 style="font-weight: 600; background: linear-gradient(135deg,#fff,#b4a7f5); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">🎬 Reelio Lite</h2>
+    <span class="badge">9:16 · beta</span>
+  </div>
+
+  <!-- main grid -->
+  <div class="dashboard" id="dashboard">
+    <!-- LEFT: upload & media -->
+    <div class="panel-left" id="leftPanel">
+      <h3>📁 upload</h3>
+      <div id="dropZone" style="border: 2px dashed #3f3f55; border-radius: 30px; padding: 1.5rem; text-align: center; margin-bottom: 1rem;">
+        <p style="color:#aaa;">🎥 drag video or click</p>
+        <input type="file" id="videoUpload" accept="video/mp4,video/quicktime" style="display:none;">
+        <button id="selectVideoBtn" class="accent" style="margin-top:8px;">select video</button>
+        <div style="font-size:0.8rem; margin-top:8px;">max 200MB</div>
+      </div>
+      <div id="videoInfo">⏱️ duration: —</div>
+      <div style="margin-top:1rem;">
+        <h3>🎵 background music</h3>
+        <input type="file" id="audioUpload" accept="audio/mp3,audio/wav,audio/m4a" style="margin:8px 0;">
+        <div class="flex-row"><span>🔊 volume</span><input type="range" id="bgVolume" min="0" max="1" step="0.05" value="0.7"></div>
+        <label style="display:flex; gap:6px; margin:6px 0;"><input type="checkbox" id="muteOriginal"> mute original</label>
+      </div>
+    </div>
+
+    <!-- CENTER: preview + play -->
+    <div class="preview-area">
+      <div class="canvas-wrapper">
+        <div id="reel-canvas-container">
+          <div id="konva-stage" style="width:100%;height:100%;"></div>
+        </div>
+      </div>
+      <div class="playback-bar">
+        <button id="playPauseBtn">▶️</button>
+        <input type="range" id="seekSlider" value="0" min="0" max="100" step="0.1">
+        <span id="timeDisplay">00:00 / 00:00</span>
+      </div>
+    </div>
+
+    <!-- RIGHT: filters, text, speed -->
+    <div class="panel-right">
+      <h3>⚡ speed</h3>
+      <div class="flex-row" style="justify-content:space-between;">
+        <button class="speed-btn" data-speed="0.5">0.5x</button>
+        <button class="speed-btn accent" data-speed="1">1x</button>
+        <button class="speed-btn" data-speed="1.5">1.5x</button>
+        <button class="speed-btn" data-speed="2">2x</button>
+        <button class="speed-btn" data-speed="3">3x</button>
+      </div>
+
+      <h3 style="margin-top:1rem;">🎨 filters</h3>
+      <div>brightness <input type="range" id="brightness" min="0.5" max="2" step="0.05" value="1"></div>
+      <div>contrast <input type="range" id="contrast" min="0.5" max="2" step="0.05" value="1"></div>
+      <div>saturation <input type="range" id="saturation" min="0" max="3" step="0.05" value="1"></div>
+      <div>blur <input type="range" id="blur" min="0" max="5" step="0.1" value="0"></div>
+      <div class="flex-row"><input type="checkbox" id="vintage"> vintage preset</div>
+
+      <h3 style="margin-top:1rem;">📝 text overlays</h3>
+      <button id="addTextBtn" class="accent" style="width:100%;">+ add text layer</button>
+      <div id="textLayersList" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- BOTTOM: trim + export -->
+    <div class="timeline-bar">
+      <div style="min-width:200px; flex:2;">
+        <div class="flex-row" style="justify-content:space-between;">
+          <span>✂️ trim start</span><span id="trimStartLabel">0s</span>
+        </div>
+        <input type="range" id="trimStart" min="0" max="100" step="0.1" value="0">
+        <div class="flex-row" style="justify-content:space-between; margin-top:6px;">
+          <span>trim end</span><span id="trimEndLabel">0s</span>
+        </div>
+        <input type="range" id="trimEnd" min="0" max="100" step="0.1" value="100">
+        <div style="margin-top:4px;">trimmed: <span id="trimmedDur">0.0s</span></div>
+      </div>
+      <div style="flex:1; display: flex; gap:12px; align-items:center; justify-content:flex-end;">
+        <button id="exportBtn" class="accent" style="padding:12px 24px;">⬇️ export MP4</button>
+        <div id="exportProgress" style="display:none; align-items:center; gap:6px;"><span>⚙️</span><progress value="0" max="100" style="width:80px;"></progress></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- embedded JavaScript -->
+<script>
+(function() {
+  // ---------- DOM elements ----------
+  const videoUpload = document.getElementById('videoUpload');
+  const selectVideoBtn = document.getElementById('selectVideoBtn');
+  const dropZone = document.getElementById('dropZone');
+  const audioUpload = document.getElementById('audioUpload');
+  const bgVolume = document.getElementById('bgVolume');
+  const muteOriginal = document.getElementById('muteOriginal');
+  const playPauseBtn = document.getElementById('playPauseBtn');
+  const seekSlider = document.getElementById('seekSlider');
+  const timeDisplay = document.getElementById('timeDisplay');
+  const trimStart = document.getElementById('trimStart');
+  const trimEnd = document.getElementById('trimEnd');
+  const trimStartLabel = document.getElementById('trimStartLabel');
+  const trimEndLabel = document.getElementById('trimEndLabel');
+  const trimmedDur = document.getElementById('trimmedDur');
+  const brightness = document.getElementById('brightness');
+  const contrast = document.getElementById('contrast');
+  const saturation = document.getElementById('saturation');
+  const blur = document.getElementById('blur');
+  const vintage = document.getElementById('vintage');
+  const addTextBtn = document.getElementById('addTextBtn');
+  const textLayersList = document.getElementById('textLayersList');
+  const exportBtn = document.getElementById('exportBtn');
+  const exportProgress = document.getElementById('exportProgress');
+
+  // ---------- global state ----------
+  let videoFile = null;
+  let videoElement = document.createElement('video');
+  videoElement.crossOrigin = 'anonymous';
+  videoElement.loop = false;
+  let audioElement = document.createElement('audio');
+  audioElement.loop = true;
+
+  let isPlaying = false;
+  let duration = 0;
+  let trimStartSec = 0, trimEndSec = 0;
+
+  // Konva stage
+  let stage, videoLayer, textLayer;
+  let videoImage; // Konva.Image
+  let textNodes = [];  // array of { id, konvaText, start, dur, ... }
+
+  // filters
+  let currentFilters = [];
+
+  // ---------- init Konva ----------
+  function initKonva() {
+    const container = document.getElementById('konva-stage');
+    const width = container.offsetWidth;
+    const height = container.offsetHeight;
+    stage = new Konva.Stage({
+      container: 'konva-stage',
+      width: width,
+      height: height
+    });
+    videoLayer = new Konva.Layer();
+    textLayer = new Konva.Layer();
+    stage.add(videoLayer);
+    stage.add(textLayer);
+
+    videoImage = new Konva.Image({
+      image: videoElement,
+      x: 0, y: 0,
+      width: width,
+      height: height
+    });
+    videoLayer.add(videoImage);
+    stage.draw();
+  }
+  window.addEventListener('resize', () => {
+    if (!stage) return;
+    const container = document.getElementById('konva-stage');
+    stage.width(container.offsetWidth);
+    stage.height(container.offsetHeight);
+    videoImage.width(container.offsetWidth);
+    videoImage.height(container.offsetHeight);
+    stage.draw();
+  });
+
+  // ---------- video loading & preview ----------
+  function loadVideo(file) {
+    videoFile = file;
+    const url = URL.createObjectURL(file);
+    videoElement.src = url;
+    videoElement.load();
+    videoElement.onloadedmetadata = () => {
+      duration = videoElement.duration;
+      trimEnd.max = 100;
+      trimEnd.value = 100;
+      trimEndSec = duration;
+      trimStart.value = 0;
+      trimStartSec = 0;
+      updateTrimLabels();
+      seekSlider.max = duration;
+      timeDisplay.textContent = `00:00 / ${formatTime(duration)}`;
+      // draw first frame
+      videoElement.currentTime = 0;
+      videoElement.onseeked = () => { applyFilters(); stage.draw(); };
+      if (stage) applyFilters();
+    };
+    // autoplay off
+  }
+
+  function applyFilters() {
+    if (!videoImage) return;
+    let filterList = [];
+    if (brightness.value != 1 || contrast.value != 1 || saturation.value != 1) {
+      // Konva HSL filter not direct; we use custom? Simpler: use css filter on canvas? but Konva image filters exist:
+      // We'll use Konva.Filters.Brighten, etc. But brighten is offset. For demo use CSS filter on stage container? Better use Konva's HSL?
+      // To keep simple, we set CSS filter on container? That would affect text. Not ideal. Let's use Konva.Filters.RGB? 
+      // Fallback: we apply only blur & vintage via konva? But we promised brightness etc. Use CSS filter on stage container for preview (text will also be filtered, but acceptable for demo)
+      // Simpler: apply CSS backdrop? I'll use stage.container().style.filter = `brightness(${brightness.value}) contrast(${contrast.value}) saturate(${saturation.value}) blur(${blur.value}px)`;
+      // That affects text too, but text overlays should also be filtered? Probably fine for preview.
+      stage.container().style.filter = `brightness(${brightness.value}) contrast(${contrast.value}) saturate(${saturation.value}) blur(${blur.value}px)`;
+    } else {
+      stage.container().style.filter = 'none';
+    }
+    if (vintage.checked) {
+      // crude sepia
+      stage.container().style.filter += ' sepia(0.5) contrast(1.1)';
+    }
+    stage.draw();
+  }
+
+  [brightness, contrast, saturation, blur, vintage].forEach(ctrl => 
+    ctrl.addEventListener('input', applyFilters)
+  );
+
+  // playback & seek
+  function updatePlayPause() {
+    playPauseBtn.textContent = isPlaying ? '⏸️' : '▶️';
+  }
+  playPauseBtn.onclick = () => {
+    if (videoElement.paused) {
+      videoElement.play().then(() => { isPlaying = true; updatePlayPause(); });
+      if (audioElement.src) audioElement.play();
+    } else {
+      videoElement.pause();
+      if (audioElement.src) audioElement.pause();
+      isPlaying = false; updatePlayPause();
+    }
+  };
+  videoElement.ontimeupdate = () => {
+    if (!duration) return;
+    seekSlider.value = videoElement.currentTime;
+    timeDisplay.textContent = `${formatTime(videoElement.currentTime)} / ${formatTime(duration)}`;
+    // enforce trim
+    if (videoElement.currentTime < trimStartSec) videoElement.currentTime = trimStartSec;
+    if (videoElement.currentTime > trimEndSec) videoElement.currentTime = trimEndSec;
+    stage.draw();
+  };
+  seekSlider.oninput = (e) => {
+    videoElement.currentTime = e.target.value;
+  };
+
+  // trim
+  function updateTrimLabels() {
+    trimStartSec = (trimStart.value / 100) * duration;
+    trimEndSec = (trimEnd.value / 100) * duration;
+    if (trimEndSec > duration) trimEndSec = duration;
+    if (trimStartSec < 0) trimStartSec = 0;
+    trimStartLabel.textContent = formatTime(trimStartSec);
+    trimEndLabel.textContent = formatTime(trimEndSec);
+    trimmedDur.textContent = formatTime(trimEndSec - trimStartSec);
+  }
+  trimStart.addEventListener('input', updateTrimLabels);
+  trimEnd.addEventListener('input', updateTrimLabels);
+
+  // speed
+  document.querySelectorAll('.speed-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const speed = parseFloat(e.target.dataset.speed);
+      videoElement.playbackRate = speed;
+    });
+  });
+
+  // music
+  audioUpload.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      audioElement.src = URL.createObjectURL(file);
+      audioElement.volume = bgVolume.value;
+    }
+  });
+  bgVolume.addEventListener('input', () => { audioElement.volume = bgVolume.value; });
+  muteOriginal.addEventListener('change', (e) => { videoElement.muted = e.target.checked; });
+
+  // text overlay system (simplified Konva.Text)
+  let textCounter = 0;
+  function addTextLayer() {
+    const id = 'txt_' + (textCounter++);
+    const newText = new Konva.Text({
+      x: stage.width()/2 - 50,
+      y: stage.height()/2 - 15,
+      text: 'Double tap to edit',
+      fontSize: 24,
+      fontFamily: 'Inter',
+      fill: '#ffffff',
+      stroke: '#6c5ce7',
+      strokeWidth: 1,
+      draggable: true,
+      id: id
+    });
+    textLayer.add(newText);
+    const textObj = {
+      id,
+      konvaText: newText,
+      start: 0,
+      duration: 5,
+      animation: 'none'
+    };
+    textNodes.push(textObj);
+    renderTextList();
+    stage.draw();
+
+    // make editable on dblclick
+    newText.on('dblclick dbltap', () => {
+      const newContent = prompt('Edit text:', newText.text());
+      if (newContent) newText.text(newContent);
+      stage.draw();
+    });
+  }
+  addTextBtn.onclick = addTextLayer;
+
+  function renderTextList() {
+    textLayersList.innerHTML = '';
+    textNodes.forEach((t, idx) => {
+      const div = document.createElement('div');
+      div.className = 'text-overlay-item';
+      div.innerHTML = `
+        <div style="display:flex; justify-content:space-between;">
+          <span contenteditable="true" style="background:#2f2f3a; padding:2px 8px; border-radius:30px;">${t.konvaText.text()}</span>
+          <button data-id="${t.id}" class="removeTextBtn" style="padding:2px 8px;">🗑️</button>
+        </div>
+        <div class="flex-row" style="margin-top:6px;">
+          <span>start</span><input type="number" data-id="${t.id}" class="txtStart" value="${t.start}" min="0" step="0.1" style="width:60px;">
+          <span>dur</span><input type="number" data-id="${t.id}" class="txtDur" value="${t.duration}" min="0.1" step="0.1" style="width:60px;">
+        </div>
+        <select data-id="${t.id}" class="txtAnim">
+          <option>fade in</option><option>slide up</option><option>pop</option>
+        </select>
+      `;
+      div.querySelector('.removeTextBtn').onclick = () => {
+        t.konvaText.destroy();
+        textNodes = textNodes.filter(n => n.id !== t.id);
+        renderTextList();
+        stage.draw();
+      };
+      div.querySelector('.txtStart').oninput = (e) => { t.start = parseFloat(e.target.value); };
+      div.querySelector('.txtDur').oninput = (e) => { t.duration = parseFloat(e.target.value); };
+      textLayersList.appendChild(div);
+    });
+  }
+
+  // file upload UI
+  selectVideoBtn.onclick = () => videoUpload.click();
+  videoUpload.onchange = (e) => { if (e.target.files[0]) loadVideo(e.target.files[0]); };
+  dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); };
+  dropZone.ondragleave = () => dropZone.classList.remove('drag-over');
+  dropZone.ondrop = (e) => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) loadVideo(e.dataTransfer.files[0]);
+  };
+
+  // export (FFmpeg.wasm lazy load)
+  exportBtn.onclick = async () => {
+    if (!videoFile) return alert('Upload a video first');
+    exportProgress.style.display = 'flex';
+    const progressBar = exportProgress.querySelector('progress');
+    try {
+      // lazy load ffmpeg
+      const { createFFmpeg, fetchFile } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.0/dist/ffmpeg.min.js');
+      const ffmpeg = createFFmpeg({ log: false, progress: ({ ratio }) => { progressBar.value = ratio * 100; } });
+      await ffmpeg.load();
+      // write files
+      ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(videoFile));
+      if (audioUpload.files[0]) {
+        ffmpeg.FS('writeFile', 'bg.mp3', await fetchFile(audioUpload.files[0]));
+      }
+      // build filter: trim + speed + basic filters (brightness,contrast,saturation,blur) using eq and boxblur
+      let filter = `trim=${trimStartSec}:${trimEndSec},setpts=${1/videoElement.playbackRate}*PTS`;
+      if (brightness.value != 1 || contrast.value != 1 || saturation.value != 1) {
+        filter += `,eq=brightness=${brightness.value-1}:contrast=${contrast.value}:saturation=${saturation.value}`;
+      }
+      if (blur.value > 0) filter += `,boxblur=${blur.value}`;
+      if (vintage.checked) filter += `,curves=preset=vintage`; // simplified
+
+      let args = ['-i', 'input.mp4', '-vf', filter, '-an'];
+      if (audioUpload.files[0] && !muteOriginal.checked) {
+        // mix with original audio (if any) - simplified: just use background music
+        args = ['-i', 'input.mp4', '-i', 'bg.mp3', '-filter_complex', `[0:a]volume=${muteOriginal.checked?0:1}[a0];[1:a]volume=${bgVolume.value}[a1];[a0][a1]amix=inputs=2:duration=longest`, '-c:v', 'libx264', '-preset', 'ultrafast', 'output.mp4'];
+      } else if (audioUpload.files[0]) {
+        args = ['-i', 'bg.mp3', '-c:v', 'libx264', '-preset', 'ultrafast', 'output.mp4'];
+      } else {
+        args = ['-c:v', 'libx264', '-preset', 'ultrafast', 'output.mp4'];
+      }
+      await ffmpeg.run(...args);
+      const data = ffmpeg.FS('readFile', 'output.mp4');
+      const blob = new Blob([data.buffer], { type: 'video/mp4' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'reelio_export.mp4'; a.click();
+    } catch (e) {
+      alert('Export failed (maybe file size, or just demo).');
+      console.error(e);
+    } finally {
+      exportProgress.style.display = 'none';
+    }
+  };
+
+  // helpers
+  function formatTime(sec) {
+    if (!sec) return '00:00';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+  }
+
+  // start konva
+  window.onload = () => {
+    initKonva();
+  };
+})();
+</script>
+</body>
+</html>
