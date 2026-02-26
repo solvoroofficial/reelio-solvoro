@@ -3,10 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>🎬 Reelio Lite – 9:16 editor</title>
-  <!-- Konva for canvas overlay (lightweight) -->
+  <title>🎬 Reelio Pro – touch video & text styling</title>
   <script src="https://unpkg.com/konva@9.3.6/konva.min.js"></script>
-  <!-- FFmpeg.wasm lazy loaded on export -->
   <style>
     * {
       margin: 0;
@@ -25,7 +23,6 @@
       padding: 8px;
     }
 
-    /* main glass card */
     #app {
       width: 100%;
       max-width: 1400px;
@@ -38,7 +35,6 @@
       box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8), 0 0 0 1px rgba(108,92,231,0.2);
     }
 
-    /* responsive grid */
     .dashboard {
       display: grid;
       grid-template-columns: 280px 1fr 300px;
@@ -47,8 +43,7 @@
       align-items: start;
     }
 
-    /* left panel */
-    .panel-left {
+    .panel-left, .panel-right {
       background: rgba(0,0,0,0.3);
       border-radius: 1.5rem;
       padding: 1.2rem;
@@ -56,7 +51,11 @@
       backdrop-filter: blur(8px);
     }
 
-    /* center preview */
+    .panel-right {
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
     .preview-area {
       display: flex;
       flex-direction: column;
@@ -68,7 +67,6 @@
       background: #0a0a0e;
       border-radius: 2rem;
       padding: 12px;
-      box-shadow: 0 20px 30px -10px black;
       border: 1px solid #2a2a3a;
       width: 100%;
       display: flex;
@@ -77,7 +75,7 @@
 
     #reel-canvas-container {
       width: 100%;
-      max-width: 360px; /* 9:16 base */
+      max-width: 360px;
       aspect-ratio: 9 / 16;
       position: relative;
       background: #000;
@@ -107,18 +105,6 @@
       background: #2a2a3a;
     }
 
-    /* right panel */
-    .panel-right {
-      background: rgba(0,0,0,0.3);
-      border-radius: 1.5rem;
-      padding: 1.2rem;
-      border: 1px solid rgba(108,92,231,0.2);
-      backdrop-filter: blur(8px);
-      max-height: 70vh;
-      overflow-y: auto;
-    }
-
-    /* bottom timeline */
     .timeline-bar {
       grid-column: 1 / -1;
       background: rgba(15,15,20,0.8);
@@ -131,8 +117,7 @@
       gap: 2rem;
     }
 
-    /* typography & controls */
-    h3 { font-size: 1rem; font-weight: 500; margin-bottom: 0.8rem; color: #ccc; letter-spacing: 0.3px; border-left: 3px solid #6c5ce7; padding-left: 8px; }
+    h3 { font-size: 1rem; font-weight: 500; margin-bottom: 0.8rem; color: #ccc; border-left: 3px solid #6c5ce7; padding-left: 8px; }
     button, .btn {
       background: #2a2a3a;
       border: none;
@@ -143,7 +128,6 @@
       font-weight: 500;
       cursor: pointer;
       transition: all 0.15s;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
       border: 1px solid #3f3f55;
     }
     button.accent {
@@ -159,9 +143,15 @@
       padding: 10px;
       margin-bottom: 10px;
       font-size: 0.85rem;
+      cursor: pointer;
+      border: 1px solid transparent;
     }
+    .text-overlay-item.selected {
+      border-color: #6c5ce7;
+      box-shadow: 0 0 0 2px rgba(108,92,231,0.5);
+    }
+    .badge { background: #6c5ce7; padding: 2px 8px; border-radius: 30px; font-size: 0.7rem; }
 
-    /* mobile layout */
     @media (max-width: 800px) {
       .dashboard {
         grid-template-columns: 1fr;
@@ -169,27 +159,21 @@
       }
       .timeline-bar { flex-direction: column; align-items: stretch; gap: 1rem; }
       .panel-right { max-height: none; }
-      .canvas-wrapper { max-width: 100%; }
     }
-
-    /* drag & drop highlight */
     .drag-over { border: 2px dashed #6c5ce7; background: rgba(108,92,231,0.1); }
-    .badge { background: #6c5ce7; padding: 2px 8px; border-radius: 30px; font-size: 0.7rem; }
-    .glow { box-shadow: 0 0 0 2px #6c5ce7; }
+    .video-toolbar { display: flex; gap: 8px; margin: 10px 0; }
   </style>
 </head>
 <body>
 <div id="app">
-  <!-- header -->
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0 0.5rem;">
-    <h2 style="font-weight: 600; background: linear-gradient(135deg,#fff,#b4a7f5); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">🎬 Reelio Lite</h2>
-    <span class="badge">9:16 · beta</span>
+    <h2 style="font-weight: 600; background: linear-gradient(135deg,#fff,#b4a7f5); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">🎬 Reelio · touch edit</h2>
+    <span class="badge">9:16 · move video</span>
   </div>
 
-  <!-- main grid -->
   <div class="dashboard" id="dashboard">
-    <!-- LEFT: upload & media -->
-    <div class="panel-left" id="leftPanel">
+    <!-- LEFT PANEL -->
+    <div class="panel-left">
       <h3>📁 upload</h3>
       <div id="dropZone" style="border: 2px dashed #3f3f55; border-radius: 30px; padding: 1.5rem; text-align: center; margin-bottom: 1rem;">
         <p style="color:#aaa;">🎥 drag video or click</p>
@@ -198,6 +182,17 @@
         <div style="font-size:0.8rem; margin-top:8px;">max 200MB</div>
       </div>
       <div id="videoInfo">⏱️ duration: —</div>
+
+      <!-- Video position controls (new) -->
+      <div style="margin-top:1rem;">
+        <h3>🎞️ video position</h3>
+        <div class="video-toolbar">
+          <button id="moveVideoBtn" class="accent">✋ move video</button>
+          <button id="resetVideoBtn">↺ reset</button>
+        </div>
+        <p style="font-size:0.8rem; color:#aaa;">drag to pan · pinch to zoom</p>
+      </div>
+
       <div style="margin-top:1rem;">
         <h3>🎵 background music</h3>
         <input type="file" id="audioUpload" accept="audio/mp3,audio/wav,audio/m4a" style="margin:8px 0;">
@@ -206,7 +201,7 @@
       </div>
     </div>
 
-    <!-- CENTER: preview + play -->
+    <!-- CENTER PREVIEW -->
     <div class="preview-area">
       <div class="canvas-wrapper">
         <div id="reel-canvas-container">
@@ -220,7 +215,7 @@
       </div>
     </div>
 
-    <!-- RIGHT: filters, text, speed -->
+    <!-- RIGHT PANEL (filters, text, styles) -->
     <div class="panel-right">
       <h3>⚡ speed</h3>
       <div class="flex-row" style="justify-content:space-between;">
@@ -241,9 +236,34 @@
       <h3 style="margin-top:1rem;">📝 text overlays</h3>
       <button id="addTextBtn" class="accent" style="width:100%;">+ add text layer</button>
       <div id="textLayersList" style="margin-top:10px;"></div>
+
+      <!-- Text style editor (appears when text selected) -->
+      <div id="textStylePanel" style="margin-top:1rem; background:#1a1a26; border-radius:24px; padding:12px; display:none;">
+        <h4 style="margin-bottom:8px;">✎ text style</h4>
+        <div class="flex-row">
+          <span>content</span>
+          <input type="text" id="textContentInput" placeholder="Type here" style="flex:1; background:#2f2f3f; border:none; color:white; padding:6px; border-radius:20px;">
+        </div>
+        <div class="flex-row">
+          <span>size</span>
+          <input type="range" id="fontSize" min="12" max="72" value="24" style="width:100px;">
+        </div>
+        <div class="flex-row">
+          <span>color</span>
+          <input type="color" id="textColor" value="#ffffff">
+          <label><input type="checkbox" id="textBold"> bold</label>
+          <label><input type="checkbox" id="textShadow"> shadow</label>
+        </div>
+        <div class="flex-row">
+          <span>animation</span>
+          <select id="textAnim">
+            <option>none</option><option>fade in</option><option>slide up</option><option>pop</option>
+          </select>
+        </div>
+      </div>
     </div>
 
-    <!-- BOTTOM: trim + export -->
+    <!-- BOTTOM TIMELINE + EXPORT -->
     <div class="timeline-bar">
       <div style="min-width:200px; flex:2;">
         <div class="flex-row" style="justify-content:space-between;">
@@ -264,10 +284,9 @@
   </div>
 </div>
 
-<!-- embedded JavaScript -->
 <script>
 (function() {
-  // ---------- DOM elements ----------
+  // DOM elements
   const videoUpload = document.getElementById('videoUpload');
   const selectVideoBtn = document.getElementById('selectVideoBtn');
   const dropZone = document.getElementById('dropZone');
@@ -289,30 +308,37 @@
   const vintage = document.getElementById('vintage');
   const addTextBtn = document.getElementById('addTextBtn');
   const textLayersList = document.getElementById('textLayersList');
+  const textStylePanel = document.getElementById('textStylePanel');
+  const textContentInput = document.getElementById('textContentInput');
+  const fontSize = document.getElementById('fontSize');
+  const textColor = document.getElementById('textColor');
+  const textBold = document.getElementById('textBold');
+  const textShadow = document.getElementById('textShadow');
+  const textAnim = document.getElementById('textAnim');
+  const moveVideoBtn = document.getElementById('moveVideoBtn');
+  const resetVideoBtn = document.getElementById('resetVideoBtn');
   const exportBtn = document.getElementById('exportBtn');
   const exportProgress = document.getElementById('exportProgress');
 
-  // ---------- global state ----------
-  let videoFile = null;
+  // video & audio elements
   let videoElement = document.createElement('video');
   videoElement.crossOrigin = 'anonymous';
   videoElement.loop = false;
   let audioElement = document.createElement('audio');
   audioElement.loop = true;
-
-  let isPlaying = false;
+  let videoFile = null;
   let duration = 0;
   let trimStartSec = 0, trimEndSec = 0;
 
-  // Konva stage
-  let stage, videoLayer, textLayer;
-  let videoImage; // Konva.Image
-  let textNodes = [];  // array of { id, konvaText, start, dur, ... }
+  // Konva
+  let stage, videoLayer, textLayer, transformer;
+  let videoImage;
+  let textNodes = []; // { id, konvaText, start, duration, animation }
+  let selectedTextId = null;
 
-  // filters
-  let currentFilters = [];
+  // transformer for video
+  let videoTransformer;
 
-  // ---------- init Konva ----------
   function initKonva() {
     const container = document.getElementById('konva-stage');
     const width = container.offsetWidth;
@@ -331,22 +357,47 @@
       image: videoElement,
       x: 0, y: 0,
       width: width,
-      height: height
+      height: height,
+      draggable: false // initially false, enabled by move button
     });
     videoLayer.add(videoImage);
+
+    // transformer for video (enable with button)
+    videoTransformer = new Konva.Transformer({
+      nodes: [videoImage],
+      enabledAnchors: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+      boundBoxFunc: (oldBox, newBox) => newBox // allow any scale/position
+    });
+    videoLayer.add(videoTransformer);
+    videoTransformer.hide();
+
+    // transformer for text (optional, we use selection highlight instead)
     stage.draw();
   }
-  window.addEventListener('resize', () => {
-    if (!stage) return;
-    const container = document.getElementById('konva-stage');
-    stage.width(container.offsetWidth);
-    stage.height(container.offsetHeight);
-    videoImage.width(container.offsetWidth);
-    videoImage.height(container.offsetHeight);
+
+  // ----- video positioning -----
+  moveVideoBtn.addEventListener('click', () => {
+    if (videoTransformer.isVisible()) {
+      videoTransformer.hide();
+      videoImage.draggable(false);
+    } else {
+      videoTransformer.show();
+      videoImage.draggable(true);
+    }
     stage.draw();
   });
 
-  // ---------- video loading & preview ----------
+  resetVideoBtn.addEventListener('click', () => {
+    videoImage.position({ x: 0, y: 0 });
+    videoImage.scale({ x: 1, y: 1 });
+    videoImage.width(stage.width());
+    videoImage.height(stage.height());
+    videoTransformer.hide();
+    videoImage.draggable(false);
+    stage.draw();
+  });
+
+  // ----- load video -----
   function loadVideo(file) {
     videoFile = file;
     const url = URL.createObjectURL(file);
@@ -354,75 +405,51 @@
     videoElement.load();
     videoElement.onloadedmetadata = () => {
       duration = videoElement.duration;
-      trimEnd.max = 100;
-      trimEnd.value = 100;
-      trimEndSec = duration;
-      trimStart.value = 0;
-      trimStartSec = 0;
+      trimEnd.max = 100; trimEnd.value = 100; trimEndSec = duration;
+      trimStart.value = 0; trimStartSec = 0;
       updateTrimLabels();
       seekSlider.max = duration;
       timeDisplay.textContent = `00:00 / ${formatTime(duration)}`;
-      // draw first frame
       videoElement.currentTime = 0;
       videoElement.onseeked = () => { applyFilters(); stage.draw(); };
-      if (stage) applyFilters();
+      if (stage) {
+        videoImage.width(stage.width());
+        videoImage.height(stage.height());
+        stage.draw();
+      }
     };
-    // autoplay off
   }
 
+  // ----- filters (CSS on stage container) -----
   function applyFilters() {
-    if (!videoImage) return;
-    let filterList = [];
-    if (brightness.value != 1 || contrast.value != 1 || saturation.value != 1) {
-      // Konva HSL filter not direct; we use custom? Simpler: use css filter on canvas? but Konva image filters exist:
-      // We'll use Konva.Filters.Brighten, etc. But brighten is offset. For demo use CSS filter on stage container? Better use Konva's HSL?
-      // To keep simple, we set CSS filter on container? That would affect text. Not ideal. Let's use Konva.Filters.RGB? 
-      // Fallback: we apply only blur & vintage via konva? But we promised brightness etc. Use CSS filter on stage container for preview (text will also be filtered, but acceptable for demo)
-      // Simpler: apply CSS backdrop? I'll use stage.container().style.filter = `brightness(${brightness.value}) contrast(${contrast.value}) saturate(${saturation.value}) blur(${blur.value}px)`;
-      // That affects text too, but text overlays should also be filtered? Probably fine for preview.
-      stage.container().style.filter = `brightness(${brightness.value}) contrast(${contrast.value}) saturate(${saturation.value}) blur(${blur.value}px)`;
-    } else {
-      stage.container().style.filter = 'none';
-    }
-    if (vintage.checked) {
-      // crude sepia
-      stage.container().style.filter += ' sepia(0.5) contrast(1.1)';
-    }
+    let filterStyle = `brightness(${brightness.value}) contrast(${contrast.value}) saturate(${saturation.value}) blur(${blur.value}px)`;
+    if (vintage.checked) filterStyle += ' sepia(0.5) contrast(1.1)';
+    stage.container().style.filter = filterStyle;
     stage.draw();
   }
-
   [brightness, contrast, saturation, blur, vintage].forEach(ctrl => 
     ctrl.addEventListener('input', applyFilters)
   );
 
-  // playback & seek
-  function updatePlayPause() {
-    playPauseBtn.textContent = isPlaying ? '⏸️' : '▶️';
-  }
+  // ----- playback & trim -----
+  function updatePlayPause() { playPauseBtn.textContent = videoElement.paused ? '▶️' : '⏸️'; }
   playPauseBtn.onclick = () => {
     if (videoElement.paused) {
-      videoElement.play().then(() => { isPlaying = true; updatePlayPause(); });
-      if (audioElement.src) audioElement.play();
+      videoElement.play().then(() => { updatePlayPause(); if (audioElement.src) audioElement.play(); });
     } else {
-      videoElement.pause();
-      if (audioElement.src) audioElement.pause();
-      isPlaying = false; updatePlayPause();
+      videoElement.pause(); if (audioElement.src) audioElement.pause(); updatePlayPause();
     }
   };
   videoElement.ontimeupdate = () => {
     if (!duration) return;
     seekSlider.value = videoElement.currentTime;
     timeDisplay.textContent = `${formatTime(videoElement.currentTime)} / ${formatTime(duration)}`;
-    // enforce trim
     if (videoElement.currentTime < trimStartSec) videoElement.currentTime = trimStartSec;
     if (videoElement.currentTime > trimEndSec) videoElement.currentTime = trimEndSec;
     stage.draw();
   };
-  seekSlider.oninput = (e) => {
-    videoElement.currentTime = e.target.value;
-  };
+  seekSlider.oninput = (e) => { videoElement.currentTime = e.target.value; };
 
-  // trim
   function updateTrimLabels() {
     trimStartSec = (trimStart.value / 100) * duration;
     trimEndSec = (trimEnd.value / 100) * duration;
@@ -437,31 +464,25 @@
 
   // speed
   document.querySelectorAll('.speed-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const speed = parseFloat(e.target.dataset.speed);
-      videoElement.playbackRate = speed;
-    });
+    btn.addEventListener('click', (e) => { videoElement.playbackRate = parseFloat(e.target.dataset.speed); });
   });
 
   // music
   audioUpload.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      audioElement.src = URL.createObjectURL(file);
-      audioElement.volume = bgVolume.value;
-    }
+    if (e.target.files[0]) audioElement.src = URL.createObjectURL(e.target.files[0]);
   });
   bgVolume.addEventListener('input', () => { audioElement.volume = bgVolume.value; });
   muteOriginal.addEventListener('change', (e) => { videoElement.muted = e.target.checked; });
 
-  // text overlay system (simplified Konva.Text)
+  // ----- TEXT SYSTEM with styling & selection -----
   let textCounter = 0;
+
   function addTextLayer() {
     const id = 'txt_' + (textCounter++);
     const newText = new Konva.Text({
       x: stage.width()/2 - 50,
       y: stage.height()/2 - 15,
-      text: 'Double tap to edit',
+      text: 'Edit me',
       fontSize: 24,
       fontFamily: 'Inter',
       fill: '#ffffff',
@@ -482,36 +503,90 @@
     renderTextList();
     stage.draw();
 
-    // make editable on dblclick
-    newText.on('dblclick dbltap', () => {
-      const newContent = prompt('Edit text:', newText.text());
-      if (newContent) newText.text(newContent);
-      stage.draw();
-    });
+    // select newly added text
+    selectText(id);
   }
   addTextBtn.onclick = addTextLayer;
 
+  function selectText(id) {
+    selectedTextId = id;
+    // update UI list highlight
+    renderTextList();
+    // find text obj
+    const txt = textNodes.find(t => t.id === id);
+    if (txt) {
+      // show style panel
+      textStylePanel.style.display = 'block';
+      // populate controls
+      textContentInput.value = txt.konvaText.text();
+      fontSize.value = txt.konvaText.fontSize();
+      textColor.value = txt.konvaText.fill();
+      textBold.checked = txt.konvaText.fontStyle().includes('bold');
+      textShadow.checked = !!txt.konvaText.shadowColor();
+      // animation (simplified, just store)
+    } else {
+      textStylePanel.style.display = 'none';
+    }
+  }
+
+  // apply style changes to selected text
+  function updateSelectedTextStyle() {
+    if (!selectedTextId) return;
+    const txt = textNodes.find(t => t.id === selectedTextId);
+    if (!txt) return;
+    const konvaText = txt.konvaText;
+    konvaText.text(textContentInput.value);
+    konvaText.fontSize(parseInt(fontSize.value));
+    konvaText.fill(textColor.value);
+    konvaText.fontStyle(textBold.checked ? 'bold' : 'normal');
+    if (textShadow.checked) {
+      konvaText.shadowColor('rgba(0,0,0,0.8)');
+      konvaText.shadowBlur(6);
+      konvaText.shadowOffset({ x: 2, y: 2 });
+    } else {
+      konvaText.shadowColor(null);
+    }
+    // animation: we just store, not implement in preview
+    txt.animation = textAnim.value;
+    stage.draw();
+    renderTextList(); // update list item text
+  }
+
+  textContentInput.addEventListener('input', updateSelectedTextStyle);
+  fontSize.addEventListener('input', updateSelectedTextStyle);
+  textColor.addEventListener('input', updateSelectedTextStyle);
+  textBold.addEventListener('change', updateSelectedTextStyle);
+  textShadow.addEventListener('change', updateSelectedTextStyle);
+  textAnim.addEventListener('change', updateSelectedTextStyle);
+
   function renderTextList() {
     textLayersList.innerHTML = '';
-    textNodes.forEach((t, idx) => {
+    textNodes.forEach((t) => {
       const div = document.createElement('div');
-      div.className = 'text-overlay-item';
+      div.className = 'text-overlay-item' + (t.id === selectedTextId ? ' selected' : '');
       div.innerHTML = `
         <div style="display:flex; justify-content:space-between;">
-          <span contenteditable="true" style="background:#2f2f3a; padding:2px 8px; border-radius:30px;">${t.konvaText.text()}</span>
+          <span>${t.konvaText.text().substring(0,15)}</span>
           <button data-id="${t.id}" class="removeTextBtn" style="padding:2px 8px;">🗑️</button>
         </div>
-        <div class="flex-row" style="margin-top:6px;">
+        <div class="flex-row" style="margin-top:4px;">
           <span>start</span><input type="number" data-id="${t.id}" class="txtStart" value="${t.start}" min="0" step="0.1" style="width:60px;">
           <span>dur</span><input type="number" data-id="${t.id}" class="txtDur" value="${t.duration}" min="0.1" step="0.1" style="width:60px;">
         </div>
-        <select data-id="${t.id}" class="txtAnim">
-          <option>fade in</option><option>slide up</option><option>pop</option>
-        </select>
       `;
-      div.querySelector('.removeTextBtn').onclick = () => {
+      // click on item selects text
+      div.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+        selectText(t.id);
+      });
+      div.querySelector('.removeTextBtn').onclick = (e) => {
+        e.stopPropagation();
         t.konvaText.destroy();
         textNodes = textNodes.filter(n => n.id !== t.id);
+        if (selectedTextId === t.id) {
+          selectedTextId = null;
+          textStylePanel.style.display = 'none';
+        }
         renderTextList();
         stage.draw();
       };
@@ -521,7 +596,24 @@
     });
   }
 
-  // file upload UI
+  // deselect on background click
+  stage?.on('click tap', (e) => {
+    if (e.target === stage) {
+      selectedTextId = null;
+      textStylePanel.style.display = 'none';
+      renderTextList();
+    }
+  });
+
+  // double-click text to edit via panel (already has input)
+  // but we can keep double-click to select as well
+  stage?.on('dblclick dbltap', (e) => {
+    if (e.target instanceof Konva.Text) {
+      selectText(e.target.id());
+    }
+  });
+
+  // ----- upload UI -----
   selectVideoBtn.onclick = () => videoUpload.click();
   videoUpload.onchange = (e) => { if (e.target.files[0]) loadVideo(e.target.files[0]); };
   dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); };
@@ -531,32 +623,29 @@
     if (e.dataTransfer.files[0]) loadVideo(e.dataTransfer.files[0]);
   };
 
-  // export (FFmpeg.wasm lazy load)
+  // ----- export (lazy ffmpeg) -----
   exportBtn.onclick = async () => {
     if (!videoFile) return alert('Upload a video first');
     exportProgress.style.display = 'flex';
     const progressBar = exportProgress.querySelector('progress');
     try {
-      // lazy load ffmpeg
       const { createFFmpeg, fetchFile } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.0/dist/ffmpeg.min.js');
       const ffmpeg = createFFmpeg({ log: false, progress: ({ ratio }) => { progressBar.value = ratio * 100; } });
       await ffmpeg.load();
-      // write files
       ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(videoFile));
       if (audioUpload.files[0]) {
         ffmpeg.FS('writeFile', 'bg.mp3', await fetchFile(audioUpload.files[0]));
       }
-      // build filter: trim + speed + basic filters (brightness,contrast,saturation,blur) using eq and boxblur
+      // build filter string (trim + speed + basic filters)
       let filter = `trim=${trimStartSec}:${trimEndSec},setpts=${1/videoElement.playbackRate}*PTS`;
       if (brightness.value != 1 || contrast.value != 1 || saturation.value != 1) {
         filter += `,eq=brightness=${brightness.value-1}:contrast=${contrast.value}:saturation=${saturation.value}`;
       }
       if (blur.value > 0) filter += `,boxblur=${blur.value}`;
-      if (vintage.checked) filter += `,curves=preset=vintage`; // simplified
+      if (vintage.checked) filter += `,curves=preset=vintage`;
 
       let args = ['-i', 'input.mp4', '-vf', filter, '-an'];
       if (audioUpload.files[0] && !muteOriginal.checked) {
-        // mix with original audio (if any) - simplified: just use background music
         args = ['-i', 'input.mp4', '-i', 'bg.mp3', '-filter_complex', `[0:a]volume=${muteOriginal.checked?0:1}[a0];[1:a]volume=${bgVolume.value}[a1];[a0][a1]amix=inputs=2:duration=longest`, '-c:v', 'libx264', '-preset', 'ultrafast', 'output.mp4'];
       } else if (audioUpload.files[0]) {
         args = ['-i', 'bg.mp3', '-c:v', 'libx264', '-preset', 'ultrafast', 'output.mp4'];
@@ -570,14 +659,13 @@
       const a = document.createElement('a');
       a.href = url; a.download = 'reelio_export.mp4'; a.click();
     } catch (e) {
-      alert('Export failed (maybe file size, or just demo).');
+      alert('Export failed (demo limit).');
       console.error(e);
     } finally {
       exportProgress.style.display = 'none';
     }
   };
 
-  // helpers
   function formatTime(sec) {
     if (!sec) return '00:00';
     const m = Math.floor(sec / 60);
@@ -585,10 +673,7 @@
     return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
   }
 
-  // start konva
-  window.onload = () => {
-    initKonva();
-  };
+  window.onload = () => { initKonva(); };
 })();
 </script>
 </body>
